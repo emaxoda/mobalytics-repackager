@@ -1,5 +1,6 @@
 
 module.exports = {
+    generateUpdatesFilesForAllChannels: false,
     appId: `com.sekwah.mobalytics-repackager`,
     productName: `Mobalytics`,
     remoteBuild: false,
@@ -13,7 +14,7 @@ module.exports = {
     linux: {
         icon: "resources/icons/",
         category: "Game",
-        publish: ["github"],
+        publish: null,
         target: [
             "AppImage",
             "snap"
