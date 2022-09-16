@@ -118,7 +118,7 @@ diff -Nrup original/moba-desktop/src/lol/utils/in-game-imports/in-game-items-imp
                  return in_game_imports_types_1.LcuGameItemsImportStatus.EMPTY_BLOCKS_LIST;
              const processGamePath = yield lcu_connection_1.getLCUPathFromProcess();
 -            const gamePath = processGamePath || root_store_1.getAppSettings().getGameFolderPath();
-+            const gamePath = app_settings_1.getAppSettings().getGameFolderPath();
++            const gamePath = root_store_1.getAppSettings().getGameFolderPath();
              if (!gamePath)
                  return in_game_imports_types_1.LcuGameItemsImportStatus.GAME_PATH_NOT_FOUND;
              const filePath = path_1.default.join(gamePath, 'Config', 'Global', 'Recommended', '!mobalytics.json');
@@ -234,7 +234,7 @@ diff -Nrup original/moba-desktop/src/windows/about/about.window.js modified/moba
              },
          });
 -        remote.enable(aboutWindow.webContents);
-+        require("@electron/remote/main").enable(mainWindow.webContents);
++        require("@electron/remote/main").enable(aboutWindow.webContents);
          navigation_1.initNavigationSecurity(aboutWindow);
          aboutWindow.setMenu(null);
          aboutWindow.loadURL(navigation_1.getSafetyWindowURL('/html/about-window.html'));
@@ -299,16 +299,53 @@ diff -Nrup original/moba-desktop/src/windows/main/main.utils.js modified/moba-de
 diff -Nrup original/moba-desktop/src/windows/main/main.window.js modified/moba-desktop/src/windows/main/main.window.js
 --- original/moba-desktop/src/windows/main/main.window.js	2022-06-21 04:22:03.885705182 -0400
 +++ modified/moba-desktop/src/windows/main/main.window.js	2022-06-21 04:22:03.974707532 -0400
-@@ -32,7 +32,7 @@ const navigation_1 = require("../../util
+@@ -32,8 +32,12 @@
  const lang_1 = require("../../../../moba-web/src/common/types/lang");
  const window_unresponsive_dialog_1 = require("../../dialogs/window-unresponsive-dialog");
  const url_1 = require("../../../../moba-web/src/common/types/url");
 -const remote = __importStar(require("@electron/remote/main"));
 +//const remote = __importStar(require("@electron/remote/main"));
  const root_store_1 = require("../../common/store/root-store");
++const adblocker1 = require("@cliqz/adblocker-electron");
++const fetch1 = require("node-fetch");
++const fs1 = require("fs");
++
  let mainWindow;
  let appWindowState;
-@@ -78,12 +78,13 @@ function ensureMainWindow() {
+ function getMainWindowState() {
+@@ -44,7 +48,7 @@
+     return mainWindow;
+ }
+ exports.getMainWindow = getMainWindow;
+-function ensureMainWindow() {
++async function ensureMainWindow() {
+     logs_1.generalLog.debug('Ensure main window');
+     if (!mainWindow) {
+         const { width: settingsWidth, height: settingsHeight } = root_store_1.getAppSettings().getDefaultAppWindowSize();    
+@@ -57,6 +61,18 @@
+             fullScreen: false,
+             maximize: false,
+         });
++        const blocker = await adblocker1.ElectronBlocker.fromLists(
++                fetch,
++                adblocker1.fullLists,
++                {
++                  enableCompression: true,
++                },
++                {
++                  path: 'engine.bin',
++                  read: async (...args) => fs1.readFileSync(...args),
++                  write: async (...args) => fs1.writeFileSync(...args),
++                },
++              );
+         mainWindow = new electron_1.BrowserWindow({
+             minWidth: desktop_default_settings_1.MIN_WINDOW_WIDTH,
+             minHeight: desktop_default_settings_1.MIN_WINDOW_HEIGHT,
+@@ -75,15 +75,19 @@ function ensureMainWindow() {
+                 allowRunningInsecureContent: false,
+                 experimentalFeatures: false,
+                 autoplayPolicy: 'user-gesture-required',
++                nativeWindowOpen: true 
              },
              show: false,
              resizable: true,
@@ -318,7 +355,9 @@ diff -Nrup original/moba-desktop/src/windows/main/main.window.js modified/moba-d
              maximizable: true,
          });
 +        require("@electron/remote/main").enable(mainWindow.webContents);
++        blocker.enableBlockingInSession(mainWindow.webContents.session);
          appWindowState.manage(mainWindow);
++        mainWindow.setMenu(null);         
 -        remote.enable(mainWindow.webContents);
          mainWindow.loadURL(navigation_1.getSafetyWindowURL(url_1.AppPath.ONBOARDING_ROOT));
          navigation_1.initNavigationSecurity(mainWindow);
@@ -330,3 +369,156 @@ diff -Nrup original/moba-desktop/src/windows/main/main.window.js modified/moba-d
 -//# sourceMappingURL=main.window.js.map
 \ No newline at end of file
 +//# sourceMappingURL=main.window.js.map
+diff -Nrup original/moba-desktop/src/common/store/root-store.js modified/moba-desktop/src/common/store/root-store.js
+--- original/moba-desktop/src/common/store/root-store.js	2022-09-14 17:53:25.981996569 -0300
++++ modified/moba-desktop/src/common/store/root-store.js	2022-09-14 18:08:26.919110933 -0300
+@@ -25,7 +25,7 @@
+ const app_settings_1 = require("../../app/app-settings/app-settings");
+ const lcu_state_processor_1 = require("../lcu-state-processor/lcu-state-processor");
+ const lcu_state_processor_2 = require("../../types/lcu-state-processor");
+-const ads_refresh_service_1 = require("../services/app-update/ads-refresh/ads-refresh.service");
++//const ads_refresh_service_1 = require("../services/app-update/ads-refresh/ads-refresh.service");
+ class RootStore {
+     constructor() {
+         this.appStore = new app_store_1.AppStore();
+@@ -47,8 +47,8 @@
+         const desktopAppUpdateService = new desktop_app_update_service_1.DesktopAppUpdateService();
+         const webAppUpdateService = new web_app_update_service_1.WebAppUpdateService();
+         const appUpdateControlService = new app_update_control_service_1.AppUpdateControlService(lcStateService);
+-        const adsRefreshService = new ads_refresh_service_1.AdsRefreshService(settingsStore, this.accountStore);
+-        this.appUpdateController = new app_update_controller_1.AppUpdateController(desktopAppUpdateService, webAppUpdateService, adsRefreshService, appUpdateControlService, webAppLoadingService, userInactivityChecker, app_config_1.DESKTOP_APP_UPDATE_CHECK_INTERVAL);
++        //const adsRefreshService = new ads_refresh_service_1.AdsRefreshService(settingsStore, this.accountStore);
++        this.appUpdateController = new app_update_controller_1.AppUpdateController(desktopAppUpdateService, webAppUpdateService, appUpdateControlService, webAppLoadingService, userInactivityChecker, app_config_1.DESKTOP_APP_UPDATE_CHECK_INTERVAL);
+     }
+     static getInstance() {
+         if (!RootStore.instance) {
+diff -Nrup original/moba-desktop/src/common/controllers/app-update.controller.js modified/moba-desktop/src/common/controllers/app-update.controller.js
+--- original/moba-desktop/src/common/controllers/app-update.controller.js	2022-09-14 18:12:05.889787413 -0300
++++ modified/moba-desktop/src/common/controllers/app-update.controller.js	2022-09-14 18:16:25.852223998 -0300
+@@ -22,11 +22,10 @@
+ const clone_deep_1 = __importDefault(require("clone-deep"));
+ const promise_with_timeout_1 = require("../../../../moba-web/src/common/utils/promise-with-timeout");
+ class AppUpdateController extends events_1.EventEmitter {
+-    constructor(desktopAppUpdateService, webAppUpdateService, adsRefreshService, appUpdateControlService, webAppLoadingService, inactivityUserCheckerService, updateCheckInterval) {
++    constructor(desktopAppUpdateService, webAppUpdateService, appUpdateControlService, webAppLoadingService, inactivityUserCheckerService, updateCheckInterval) {
+         super();
+         this.desktopAppUpdateService = desktopAppUpdateService;
+         this.webAppUpdateService = webAppUpdateService;
+-        this.adsRefreshService = adsRefreshService;
+         this.appUpdateControlService = appUpdateControlService;
+         this.webAppLoadingService = webAppLoadingService;
+         this.inactivityUserCheckerService = inactivityUserCheckerService;
+@@ -57,12 +56,10 @@
+             return Promise.all([
+                 this.desktopAppUpdateService.checkUpdate(),
+                 this.webAppUpdateService.checkUpdate(),
+-                this.adsRefreshService.checkUpdate(),
+-            ]).then(([isDesktopAppUpdate, isWebAppUpdate, isAdsRefresh]) => {
++            ]).then(([isDesktopAppUpdate, isWebAppUpdate]) => {
+                 state.checkResults = {
+                     hasDesktopApp: isDesktopAppUpdate,
+-                    hasWebApp: isWebAppUpdate,
+-                    hasAds: isAdsRefresh,
++                    hasWebApp: isWebAppUpdate
+                 };
+                 this.log('Updates check results', { state });
+                 if (app_update_utils_1.isThereAtLeastOneTrueResult(state.checkResults)) {
+@@ -95,10 +92,6 @@
+                 this.log(`Start downloading desktop app update.`);
+                 data.prepareResults.hasDesktopApp = yield this.desktopAppUpdateService.downloadUpdate();
+             }
+-            if (checkResults.hasAds) {
+-                this.log(`Start processing ads update.`);
+-                data.prepareResults.hasAds = true;
+-            }
+             if (checkResults.hasWebApp) {
+                 this.log(`Start processing web app update.`);
+                 data.prepareResults.hasWebApp = true;
+@@ -184,10 +177,6 @@
+             this.log('Start desktop app update installing');
+             return this.desktopAppUpdateService.applyUpdate();
+         }
+-        if (prepareResults.hasAds) {
+-            this.log('Start ads refresh applying');
+-            return this.adsRefreshService.applyUpdate();
+-        }
+         if (prepareResults.hasWebApp) {
+             this.log('Start web app update processing');
+             return this.webAppUpdateService.applyUpdate();
+@@ -224,14 +213,11 @@
+                 checks = this.state.checkResults;
+                 break;
+         }
+-        const { hasWebApp, hasDesktopApp, hasAds } = checks;
++        const { hasWebApp, hasDesktopApp } = checks;
+         let kind = null;
+         if (hasDesktopApp) {
+             kind = 'Desktop';
+         }
+-        else if (hasAds) {
+-            kind = 'Ads';
+-        }
+         else if (hasWebApp) {
+             kind = 'Web';
+         }
+diff -Nrup original/moba-desktop/src/common/controllers/app-update.controller.test.jsmodified/moba-desktop/src/common/controllers/app-update.controller.test.js
+--- original/moba-desktop/src/common/controllers/app-update.controller.test.js	2022-09-14 18:19:17.002148054 -0300
++++ modified/moba-desktop/src/common/controllers/app-update.controller.test.js	2022-09-14 18:24:42.599710786 -0300
+@@ -10,7 +10,7 @@
+ const logs_1 = require("../../utils/logs");
+ const account_store_mock_1 = require("../../mocks/account-store.mock");
+ const root_store_1 = require("../store/root-store");
+-const ads_refresh_service_mock_1 = require("../../mocks/ads-refresh.service.mock");
++//const ads_refresh_service_mock_1 = require("../../mocks/ads-refresh.service.mock");
+ const app_update_controller_mock_1 = require("../../mocks/app-update.controller.mock");
+ const app_update_control_service_1 = require("../services/app-update/app-update-control.service");
+ describe('App updater', () => {
+@@ -18,14 +18,14 @@
+     const webAppUpdateService = new web_app_update_service_mock_1.WebAppUpdateServiceMock();
+     const appSettingsStoreMock = root_store_1.getAppSettings();
+     const accountStoreMock = new account_store_mock_1.AccountStoreMock();
+-    const adsRefreshService = new ads_refresh_service_mock_1.AdsRefreshServiceMock(appSettingsStoreMock, accountStoreMock);
++    //const adsRefreshService = new ads_refresh_service_mock_1.AdsRefreshServiceMock(appSettingsStoreMock, accountStoreMock);
+     const liveCompanionStataMock = new live_companion_stata_mock_1.LiveCompanionStataMock();
+     const appStore = { isWebAppLoaded: true };
+     const webAppLoadingServiceLogger = new logger_service_1.LoggerService(logs_1.appAutoUpdateLog, 'Web app loading service');
+     const webAppLoadingService = new web_app_loading_service_1.WebAppLoadingService(5, appStore, webAppLoadingServiceLogger);
+     const appUpdateControlServiceMock = new app_update_control_service_1.AppUpdateControlService(liveCompanionStataMock);
+     const inactivityUserChecker = new inactivity_user_checker_mock_1.InactivityUserCheckerMock(1000, 3000, liveCompanionStataMock);
+-    const updater = new app_update_controller_mock_1.AppUpdateControllerMock(desktopAppUpdateServiceMock, webAppUpdateService, adsRefreshService, appUpdateControlServiceMock, webAppLoadingService, inactivityUserChecker, 10 * 1000);
++    const updater = new app_update_controller_mock_1.AppUpdateControllerMock(desktopAppUpdateServiceMock, webAppUpdateService, appUpdateControlServiceMock, webAppLoadingService, inactivityUserChecker, 10 * 1000);
+     beforeEach(() => {
+         inactivityUserChecker.inactive = true;
+         inactivityUserChecker.start();
+@@ -35,7 +35,7 @@
+         desktopAppUpdateServiceMock.isUpdateAvailable = false;
+         desktopAppUpdateServiceMock.isUpdateDownloaded = false;
+         webAppUpdateService.isUpdateAvailable = false;
+-        adsRefreshService.isUpdateAvailable = false;
++        //adsRefreshService.isUpdateAvailable = false;
+         liveCompanionStataMock.setFlowPhase(lc_companion_desktop_data_type_1.LcuFlowSessionPhase.None);
+         inactivityUserChecker.stop();
+         updater.stop();
+@@ -106,12 +106,8 @@
+     }, 30 * 1000);
+     it(`
+     WepApp loaded.
+-    Ads refresh is available. 
+-    Only on 3rd update check user becomes inactive.
+-    Ads update should be successfully applied and it should happened only once.
+     `, done => {
+         appStore.isWebAppLoaded = true;
+-        adsRefreshService.isUpdateAvailable = true;
+         inactivityUserChecker.inactive = false;
+         updater.start();
+         let j = 0;
+@@ -120,9 +116,6 @@
+             if (j === 2)
+                 inactivityUserChecker.inactive = true;
+         });
+-        adsRefreshService.on('apply-update', () => {
+-            done();
+-        });
+     }, 300 * 1000);
+     describe('Force update', () => {
+         it(`      
