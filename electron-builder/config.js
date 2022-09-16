@@ -17,7 +17,9 @@ module.exports = {
         publish: null,
         target: [
             "AppImage",
-            "snap"
+            "snap",
+            "deb",
+            "rpm"
         ]
     },
     protocols: [{
